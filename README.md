@@ -11,7 +11,7 @@ Marcelle is still experimental and is currently under active development. Breaki
 ## Installing
 
 ```shell
-pip install marcelle
+pip install .
 ```
 
 ## Basic Usage
