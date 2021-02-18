@@ -4,9 +4,10 @@ import os
 import requests
 from numpy import sum
 from tensorflow.keras.backend import count_params
+from .utils import conform_dict
 
 
-class MarcelleRemote:
+class Remote:
     def __init__(
         self,
         backend_root="http://localhost:3030",
@@ -24,18 +25,20 @@ class MarcelleRemote:
         self.run_data = {}
         self.run_id = None
 
-    def create_run(self, model, params):
+    def create_run(self, model, params, loss=None):
         begin_date = datetime.now()
         self.run_id = None
-        self.run_data = {
-            "run_start_at": begin_date.strftime("%Y-%m-%dT%H:%M:%S"),
-            "source": self.source,
-            "status": "idle",
-            "params": params,
-            "model": get_model_info(model, self.source),
-            "logs": {},
-            "checkpoints": [],
-        }
+        self.run_data = conform_dict(
+            {
+                "run_start_at": begin_date.strftime("%Y-%m-%dT%H:%M:%S"),
+                "source": self.source,
+                "status": "idle",
+                "params": params,
+                "model": get_model_info(model, self.source, loss),
+                "logs": {},
+                "checkpoints": [],
+            }
+        )
         self.create()
 
     def train_begin(self, epochs):
@@ -66,6 +69,7 @@ class MarcelleRemote:
     def update(self, run_data=None):
         if run_data is not None:
             self.run_data = run_data
+        self.run_data = conform_dict(self.run_data)
         if not self.run_id:
             print("Warning: could not reach Marcelle backend at " + str(self.runs_url))
             return
@@ -82,6 +86,7 @@ class MarcelleRemote:
     def create(self, run_data=None):
         if run_data is not None:
             self.run_data = run_data
+        self.run_data = conform_dict(self.run_data)
         try:
             res = requests.post(
                 self.runs_url,
@@ -257,15 +262,16 @@ def get_layers_summary(model):
     return model_summary
 
 
-def get_model_info(model, source):
-    loss_name = model.loss if type(model.loss) == str else model.loss.name
+def get_model_info(model, source, loss=None):
     if source == "keras":
+        if loss is None and hasattr(model, "loss"):
+            loss = model.loss if type(model.loss) == str else model.loss.name
         return {
             "name": model.name,
             "param_count": count_model_params(model),
             "summary": get_summary(model),
             "layers": get_layers_summary(model),
-            "loss": loss_name,
+            "loss": loss or "Unknown",
         }
     else:
         raise Exception("Only 'keras' source is implemented at the moment")

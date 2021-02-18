@@ -2,7 +2,7 @@ import json
 import os
 
 
-class MarcelleUploader:
+class Uploader:
     def __init__(self, remote):
         super().__init__()
         self.remote = remote
@@ -44,13 +44,12 @@ class MarcelleUploader:
                 print(f"Run {start} already exists on the server, updating...")
         else:
             print(f"Run {start} not found on the server, uploading...")
+        if not run_exists:
+            self.remote.create(self.run_data)
         self.upload_new_checkpoints()
+        self.remote.update(self.run_data)
         with open(os.path.join(run_directory, "run_data.json"), "w") as json_file:
             json.dump(self.run_data, json_file)
-        if run_exists:
-            self.remote.update(self.run_data)
-        else:
-            self.remote.create(self.run_data)
         print("Done")
 
     def upload_new_checkpoints(self):
