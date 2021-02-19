@@ -21,17 +21,13 @@ pip install .
 ```py
 from marcelle import MarcelleCallback
 
-mrc_callback = MarcelleCallback(
+mrc_callback = KerasCallback(
     backend_root="http://localhost:3030",
-    runs_path="runs",
     disk_save_formats=["h5", "tfjs"],
     remote_save_format="tfjs",
-    model_checkpoint_freq=1,
+    model_checkpoint_freq=None,
     base_log_dir="marcelle-logs",
-    run_params={
-      "learning_rate": 1e-3,
-      "some_param": "custom_value",
-    }
+    run_params={},
 )
 
 model.fit(
@@ -41,6 +37,36 @@ model.fit(
     # other callbacks
   ]
 )
+```
+
+### Writer (for custom training loops)
+
+```py
+from marcelle import Writer
+
+writer = Writer(
+    backend_root="http://localhost:3030",
+    disk_save_formats=["h5", "tfjs"],
+    remote_save_format="tfjs",
+    base_log_dir="marcelle-logs",
+    source="keras",
+)
+
+writer.create_run(model, params, loss.name)
+writer.train_begin(epochs)
+
+for epoch in range(epochs):
+  # ...
+  logs = {
+    "loss": 1.3,
+    "accuracy": 0.7,
+    "val_loss": 2.3,
+    "val_accuracy": 0.52,
+  }
+  assets = ["path/to/asset1.wav", "path/to/asset2.wav"]
+  self.writer.save_epoch(epoch, logs=logs, save_checkpoint=True, assets=assets)
+
+writer.train_end(save_checkpoint=True)
 ```
 
 ### Batch upload
@@ -58,8 +84,7 @@ if __name__ == "__main__":
     uploader = MarcelleUploader(
         MarcelleRemote(
             backend_root="http://localhost:3030",
-            runs_path="runs",
-            models_path="tfjs-models",
+            save_format="tfjs",
             source="keras",
         )
     )
