@@ -27,13 +27,13 @@ class Uploader:
             self.run_data = json.load(json_file)
         start = self.run_data["run_start_at"]
         print(f"Retrieving remote run '{start}'...")
-        run_exists = self.remote.retrieve_run(start)
-        if run_exists:
+        remote_run_data = self.remote.retrieve_run(start)
+        if remote_run_data:
             dict_equal = True
             for key in self.run_data:
                 if not (
-                    key in self.remote.run_data
-                    and self.run_data[key] == self.remote.run_data[key]
+                    key in remote_run_data
+                    and self.run_data[key] == remote_run_data[key]
                 ):
                     dict_equal = False
                     break
@@ -44,7 +44,6 @@ class Uploader:
                 print(f"Run {start} already exists on the server, updating...")
         else:
             print(f"Run {start} not found on the server, uploading...")
-        if not run_exists:
             self.remote.create(self.run_data)
         self.upload_new_checkpoints()
         self.remote.update(self.run_data)
@@ -55,9 +54,11 @@ class Uploader:
     def upload_new_checkpoints(self):
         upload_count = 0
         for i, checkpoint in enumerate(self.run_data["checkpoints"]):
-            if "model_id" in checkpoint:
+            if "_id" in checkpoint:
                 continue
-            remote_checkpoint = self.remote.upload_model(checkpoint["local_path"])
+            remote_checkpoint = self.remote.upload_model(
+                checkpoint["local_path"], checkpoint
+            )
             self.run_data["checkpoints"][i] = {**checkpoint, **remote_checkpoint}
             upload_count += 1
         print(f"{upload_count} models were uploaded to marcelle")
