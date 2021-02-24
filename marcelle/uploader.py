@@ -18,8 +18,6 @@ class Uploader:
         self.local_checkpoints_epochs = []
 
     def upload(self, run_directory, overwrite=False):
-        if overwrite:
-            raise Exception("Overwrite mode not yet implemented")
         if not os.path.exists(run_directory) or not os.path.isdir(run_directory):
             raise Exception(f"Directory {run_directory} does not exist os ir invalid")
         self.reset()
@@ -28,6 +26,9 @@ class Uploader:
         start = self.run_data["run_start_at"]
         print(f"Retrieving remote run '{start}'...")
         remote_run_data = self.remote.retrieve_run(start)
+        if remote_run_data and overwrite:
+            self.remote.remove_run(remote_run_data)
+            remote_run_data = False
         if remote_run_data:
             dict_equal = True
             for key in self.run_data:
@@ -43,19 +44,25 @@ class Uploader:
             else:
                 print(f"Run {start} already exists on the server, updating...")
         else:
-            print(f"Run {start} not found on the server, uploading...")
+            if not overwrite:
+                print(f"Run {start} not found on the server, uploading...")
+            else:
+                print(f"Run {start} was removed from the server, re-uploading...")
             self.remote.create(self.run_data)
-        self.upload_new_checkpoints()
+        self.upload_new_checkpoints(overwrite=overwrite)
         self.remote.update(self.run_data)
         with open(os.path.join(run_directory, "run_data.json"), "w") as json_file:
             json.dump(self.run_data, json_file)
         print("Done")
 
-    def upload_new_checkpoints(self):
+    def upload_new_checkpoints(self, overwrite=False):
         upload_count = 0
         for i, checkpoint in enumerate(self.run_data["checkpoints"]):
             if "_id" in checkpoint:
-                continue
+                if overwrite:
+                    del checkpoint["_id"]
+                else:
+                    continue
             remote_checkpoint = self.remote.upload_model(
                 checkpoint["local_path"], checkpoint
             )

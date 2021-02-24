@@ -214,3 +214,33 @@ class Remote:
         except requests.exceptions.RequestException:
             print("Warning: could not reach Marcelle backend at " + str(self.runs_url))
         return run_data
+
+    def remove_run(self, run_data):
+        for checkpoint in run_data["checkpoints"]:
+            try:
+                req_url = self.models_url + "/" + checkpoint["_id"]
+                res = requests.delete(req_url)
+                print("remove: res.status_code=", res.status_code)
+                if res.status_code != 200:
+                    print(
+                        f"An error occured with HTTP Status Code: {res.status_code}\n"
+                        f"Request URL: {req_url}"
+                    )
+            except requests.exceptions.RequestException:
+                print(
+                    "Warning: could not reach Marcelle backend at "
+                    + str(self.models_url)
+                )
+        try:
+            res = requests.delete(self.runs_url + "/" + run_data["_id"])
+            print("remove: res.status_code=", res.status_code)
+            if res.status_code != 200:
+                print(f"An error occured with HTTP Status Code: {res.status_code}")
+            else:
+                res_json = res.json()
+                start_date = res_json["run_start_at"]
+                print(f"Removed run {id} from server (run start date: {start_date})")
+            return True
+        except requests.exceptions.RequestException:
+            print("Warning: could not reach Marcelle backend at " + str(self.runs_url))
+            return False
