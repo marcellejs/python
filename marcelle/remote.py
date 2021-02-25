@@ -15,6 +15,17 @@ class Remote:
         save_format="tfjs",
         source="keras",
     ):
+        """The remote manager for Marcelle allows to save run information and upload
+        model checkpoints and assets to a Marcelle backend
+
+        Args:
+            backend_root (str, optional): The backend's root URL.
+                Defaults to "http://localhost:3030".
+            save_format (str, optional): Format used to upload the models to the
+                backend. Can be either "tfjs" or "onnx". Defaults to "tfjs".
+            source (str, optional): Source framework name. Only "keras" is
+                currently fully supported. Defaults to "keras".
+        """
         super().__init__()
         self.backend_root = backend_root + ("" if backend_root[-1] == "/" else "/")
         self.save_format = save_format
@@ -24,7 +35,14 @@ class Remote:
         self.source = source
         self.run_id = None
 
-    def create(self, run_data=None):
+    def create(self, run_data):
+        """Create a new training run, and upload it on the server
+
+        Args:
+            run_data (dict, optional): Run data as a JSON-serializable dictionary.
+
+        TODO: Document "run_data" format (@see Writer)
+        """
         try:
             res = requests.post(self.runs_url, json=run_data)
             if res.status_code != 201:
@@ -38,6 +56,11 @@ class Remote:
             print("Warning: could not reach Marcelle backend at " + str(self.runs_url))
 
     def update(self, run_data=None):
+        """Update the run data, and upload it on the server
+
+        Args:
+            run_data (dict, optional): Run data as a JSON-serializable dictionary.
+        """
         if not self.run_id:
             print("Warning: could not reach Marcelle backend at " + str(self.runs_url))
             return
@@ -52,6 +75,21 @@ class Remote:
             print("Warning: could not reach Marcelle backend at " + str(self.runs_url))
 
     def upload_model(self, path_to_model, local_format, metadata={}):
+        """Upload a model checkpoint to the backend server
+
+        Args:
+            path_to_model (string): local path to the model files
+            local_format (string): format of the saved model. Can be "h5 or
+                "save_model".
+            metadata (dict, optional): Optional metadata to save with the model.
+                Defaults to {}.
+
+        Raises:
+            Exception: When local and remote formats are Unsupported
+
+        Returns:
+            dict: The stored model's information from the backend
+        """
         if self.save_format not in ["tfjs", "onnx"]:
             raise Exception(
                 f"Unknown save format `{self.save_format}`." "Must be `tfjs` or `onnx`."
@@ -95,6 +133,16 @@ class Remote:
                 )
 
     def upload_tfjs_model(self, tmp_path, metadata={}):
+        """Upload a TFJS model checkpoint to the backend server
+
+        Args:
+            tmp_path (string): local path to the temporary model files
+            metadata (dict, optional): Optional metadata to save with the model.
+                Defaults to {}.
+
+        Returns:
+            dict: The stored model's information from the backend
+        """
         files = []
         json_file = open(os.path.join(tmp_path, "model.json"), "r")
         files.append(("model.json", ("model.json", json_file, "application/json")))
@@ -143,6 +191,16 @@ class Remote:
             return {}
 
     def upload_onnx_model(self, tmp_path, metadata={}):
+        """Upload an ONNX model checkpoint to the backend server
+
+        Args:
+            tmp_path (string): local path to the temporary model files
+            metadata (dict, optional): Optional metadata to save with the model.
+                Defaults to {}.
+
+        Returns:
+            dict: The stored model's information from the backend
+        """
         if ".onnx" not in tmp_path:
             tmp_path = f"{tmp_path}.onnx"
         onnx_file = open(tmp_path, "rb")
@@ -183,6 +241,17 @@ class Remote:
             return {}
 
     def upload_asset(self, path_to_asset, metadata={}):
+        """Upload an asset to the backend server. Assets are files of arbitrary
+        format (images, sound files, ...)
+
+        Args:
+            path_to_asset (string): local path to the asset file
+            metadata (dict, optional): Optional metadata to save with the asset.
+                Defaults to {}.
+
+        Returns:
+            dict: The stored assets's information from the backend
+        """
         asset_file = open(path_to_asset, "rb")
         kind = filetype.guess(path_to_asset)
         if kind is None:
@@ -231,6 +300,14 @@ class Remote:
             return {}
 
     def retrieve_run(self, run_start_at):
+        """Retrieve a training run from the backend using its starting date
+
+        Args:
+            run_start_at (string): Starting date of the run
+
+        Returns:
+            dict: The run data if it was found on the server, False otherwise
+        """
         run_data = False
         try:
             res = requests.get(
@@ -249,6 +326,16 @@ class Remote:
         return run_data
 
     def remove_run(self, run_data):
+        """Remove a given run from the server, along with the associated
+        checkpoints and assets.
+
+        Args:
+            run_data (dict): Run data to be removed.
+                Must have "_id" and "checkpoints" fields
+
+        Returns:
+            bool: wether the run was successfully removed
+        """
         for checkpoint in run_data["checkpoints"]:
             try:
                 req_url = self.models_url + "/" + checkpoint["_id"]

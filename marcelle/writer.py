@@ -18,6 +18,23 @@ class Writer:
         base_log_dir="marcelle-logs",
         source="keras",
     ):
+        """The Writer class allows to save training information locally and to a backend
+
+        Args:
+            backend_root (str, optional): The backend's root URL.
+                Defaults to "http://localhost:3030".
+            disk_save_format (str, optional): Format used to store the models locally.
+                Can be either "saved_model" or "h5". Defaults to "h5".
+            remote_save_format (str, optional): Format used to upload the models to the
+                backend. Can be either "tfjs" or "onnx". Defaults to "tfjs".
+            base_log_dir (str, optional): Path to the directory where runs should be
+                stored. Defaults to "marcelle-logs".
+            source (str, optional): Source framework name. Only "keras" is
+                currently fully supported. Defaults to "keras".
+
+        TODO: take a remote instance as argument (as for uploader), and make it optional
+        TODO: make Keras model optional
+        """
         self.base_log_dir = base_log_dir
         self.log_folder = None
         self.disk_save_format = disk_save_format
@@ -31,6 +48,15 @@ class Writer:
         self.run_data = None
 
     def create_run(self, model, run_params={}, loss=None):
+        """Create a new training run
+
+        Args:
+            model (keras.Model): A keras.Model instance associated with the training
+            run_params (dict, optional): A dictionary of parameters associated with
+                the training run (e.g. hyperparameters). Defaults to {}.
+            loss (string or loss function, optional): The loss function used for training.
+                Defaults to None.
+        """
         begin_date = datetime.now()
         self.run_data = conform_dict(
             {
@@ -50,6 +76,11 @@ class Writer:
         self.__write_to_disk()
 
     def train_begin(self, epochs):
+        """Signal that the training has started
+
+        Args:
+            epochs (number): The total number of expected training epochs
+        """
         self.run_data["status"] = "start"
         self.run_data["epoch"] = 0
         self.run_data["epochs"] = conform_dict(epochs)
@@ -57,6 +88,21 @@ class Writer:
         self.__write_to_disk()
 
     def save_epoch(self, epoch, logs=None, save_checkpoint=False, assets=[]):
+        """Save the results at the end of an epoch, with optional associated
+        checkpoint and assets
+
+        Args:
+            epoch (number): the epoch
+            logs (dict, optional): A dictionary of log values to record for the
+                current epochs. The information should only concern the current
+                epoch (for instance, logs for loss values should be scalar:
+                `{"loss": 3.14}`). Defaults to None.
+            save_checkpoint (bool, optional): If `True`, a checkpoint will be saved
+                locally and uploaded to the backend, according to the formats specified
+                in the constructor. Defaults to False.
+            assets (list[string], optional): A list of assets paths associated with
+                the epoch to upload. Defaults to [].
+        """
         self.run_data["status"] = "epoch"
         self.run_data["epoch"] = epoch
         if len(self.run_data["logs"]) == 0:
@@ -109,6 +155,14 @@ class Writer:
         self.__write_to_disk()
 
     def train_end(self, logs=None, save_checkpoint=False):
+        """Signal that the training has ended
+
+        Args:
+            logs (dict, optional): Dictionary of logs (UNUSED?). Defaults to None.
+            save_checkpoint (bool, optional): If `True`, a checkpoint will be saved
+                locally and uploaded to the backend, according to the formats specified
+                in the constructor. Defaults to False.
+        """
         self.run_data["status"] = "success"
         if save_checkpoint:
             self.save_checkpoint("final")

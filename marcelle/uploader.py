@@ -5,6 +5,14 @@ from tqdm import tqdm
 
 class Uploader:
     def __init__(self, remote):
+        """The Uploader class alows to upload the results of a locally
+        stored training run to the backend.
+
+        Args:
+            remote (Remote): An instance of Remote class
+
+        TODO: Implement asset uploading
+        """
         super().__init__()
         self.remote = remote
         self.run_data = {}
@@ -19,6 +27,16 @@ class Uploader:
         self.local_checkpoints_epochs = []
 
     def upload(self, run_directory, overwrite=False):
+        """Upload a training run from a directory
+
+        Args:
+            run_directory (string): run directory, from a Writer or Keras callback
+            overwrite (bool, optional): If True, overwrites the data on the server,
+            replacing run information and checkpoints. Defaults to False.
+
+        Raises:
+            Exception: If the input directory does not exist
+        """
         if not os.path.exists(run_directory) or not os.path.isdir(run_directory):
             raise Exception(f"Directory {run_directory} does not exist os ir invalid")
         self.reset()
@@ -50,13 +68,13 @@ class Uploader:
             else:
                 print(f"Run {start} was removed from the server, re-uploading...")
             self.remote.create(self.run_data)
-        self.upload_new_checkpoints(overwrite=overwrite)
+        self.__upload_new_checkpoints(overwrite=overwrite)
         self.remote.update(self.run_data)
         with open(os.path.join(run_directory, "run_data.json"), "w") as json_file:
             json.dump(self.run_data, json_file)
         print("Done")
 
-    def upload_new_checkpoints(self, overwrite=False):
+    def __upload_new_checkpoints(self, overwrite=False):
         upload_count = 0
         for i, checkpoint in tqdm(enumerate(self.run_data["checkpoints"])):
             if "_id" in checkpoint:
