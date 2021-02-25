@@ -2,6 +2,7 @@ from datetime import datetime
 import os
 import json
 import subprocess
+from tensorflow import saved_model
 import tensorflowjs as tfjs
 import keras2onnx
 from .remote import Remote
@@ -12,16 +13,14 @@ class Writer:
     def __init__(
         self,
         backend_root="http://localhost:3030",
-        disk_save_formats=["h5", "tfjs"],
+        disk_save_format="h5",
         remote_save_format="tfjs",
         base_log_dir="marcelle-logs",
         source="keras",
     ):
         self.base_log_dir = base_log_dir
         self.log_folder = None
-        self.disk_save_formats = disk_save_formats
-        if remote_save_format not in disk_save_formats:
-            self.disk_save_formats.append(remote_save_format)
+        self.disk_save_format = disk_save_format
         self.remote_save_format = remote_save_format
         self.remote = Remote(
             backend_root=backend_root,
@@ -79,10 +78,16 @@ class Writer:
         if model is not None:
             self.model = model
         model_path = self.__write_models_to_disk(epoch)
-        checkpoint_meta = {"epoch": epoch, "local_path": model_path, **metadata}
+        checkpoint_meta = {
+            "epoch": epoch,
+            "local_path": model_path,
+            "local_format": self.disk_save_format,
+            **metadata,
+        }
         remote_checkpoint = self.remote.upload_model(
             model_path,
-            checkpoint_meta,
+            local_format=self.disk_save_format,
+            metadata=checkpoint_meta,
         )
         checkpoint = {**checkpoint_meta, **remote_checkpoint}
 
@@ -129,14 +134,16 @@ class Writer:
             if type(epoch) == int
             else "model_checkpoint_final"
         )
-        basepath = os.path.join(self.log_folder, basename)
-        if "h5" in self.disk_save_formats:
-            self.model.save(os.path.join(self.log_folder, f"{basename}.h5"))
-        if "tfjs" in self.disk_save_formats:
-            tfjs.converters.save_keras_model(self.model, basepath)
-        if "onnx" in self.disk_save_formats:
+        model_path = os.path.join(self.log_folder, basename)
+        if self.disk_save_format == "h5":
+            model_path += ".h5"
+            self.model.save(model_path)
+        elif self.disk_save_format == "saved_model":
+            saved_model.save(self.model, model_path)
+        if self.disk_save_format == "tfjs":
+            tfjs.converters.save_keras_model(self.model, model_path)
+        if self.disk_save_format == "onnx":
+            model_path += ".onnx"
             onnx_model = keras2onnx.convert_keras(self.model, self.model.name)
-            keras2onnx.save_model(
-                onnx_model, os.path.join(self.log_folder, f"{basename}.onnx")
-            )
-        return basepath
+            keras2onnx.save_model(onnx_model, model_path)
+        return model_path

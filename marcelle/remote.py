@@ -2,6 +2,10 @@ from glob import glob
 import filetype
 import os
 import requests
+import shutil
+from tensorflow import keras
+import tensorflowjs as tfjs
+import keras2onnx
 
 
 class Remote:
@@ -47,25 +51,54 @@ class Remote:
         except requests.exceptions.RequestException:
             print("Warning: could not reach Marcelle backend at " + str(self.runs_url))
 
-    def upload_model(self, path_to_model, metadata={}):
-        if self.source == "keras":
-            if self.save_format == "tfjs":
-                return self.upload_tfjs_model(path_to_model, metadata)
-            elif self.save_format == "onnx":
-                return self.upload_onnx_model(path_to_model, metadata)
+    def upload_model(self, path_to_model, local_format, metadata={}):
+        if self.save_format not in ["tfjs", "onnx"]:
+            raise Exception(
+                f"Unknown save format `{self.save_format}`." "Must be `tfjs` or `onnx`."
+            )
+        if local_format not in ["h5", "saved_model"]:
+            raise Exception(
+                "Unsupported local model format," "options are: 'h5' and 'saved_model'."
+            )
+        if self.save_format == "tfjs":
+            if local_format == "h5":
+                reconstructed_model = keras.models.load_model(path_to_model)
+                print("reconstructed_model (h5)", reconstructed_model)
+                tmp_path = "~tmp-tfjs~"
+                tfjs.converters.save_keras_model(reconstructed_model, tmp_path)
+            elif local_format == "saved_model":
+                tmp_path = "~tmp-tfjs~"
+                tfjs.converters.convert_tf_saved_model(
+                    path_to_model,
+                    tmp_path,
+                    control_flow_v2=False,
+                    experiments=False,
+                    metadata=metadata,
+                )
+            res = self.upload_tfjs_model(tmp_path, metadata)
+            shutil.rmtree(tmp_path)
+            return res
+        elif self.save_format == "onnx":
+            if self.source == "keras":
+                reconstructed_model = keras.models.load_model(path_to_model)
+                onnx_model = keras2onnx.convert_keras(
+                    reconstructed_model, reconstructed_model.name
+                )
+                tmp_path = "~tmp-onnx~"
+                keras2onnx.save_model(onnx_model, tmp_path)
+                res = self.upload_onnx_model(tmp_path, metadata)
+                shutil.rmtree(tmp_path)
+                return res
             else:
                 raise Exception(
-                    f"Unknown save format `{self.save_format}`."
-                    "Must be `tfjs` or `onnx`."
+                    "Only 'keras' source is implemented for ONNX at the moment"
                 )
-        else:
-            raise Exception("Only 'keras' source is implemented at the moment")
 
-    def upload_tfjs_model(self, path_to_model, metadata={}):
+    def upload_tfjs_model(self, tmp_path, metadata={}):
         files = []
-        json_file = open(os.path.join(path_to_model, "model.json"), "r")
+        json_file = open(os.path.join(tmp_path, "model.json"), "r")
         files.append(("model.json", ("model.json", json_file, "application/json")))
-        model_files = glob(os.path.join(path_to_model, "*.bin"))
+        model_files = glob(os.path.join(tmp_path, "*.bin"))
         bin_files = [open(model_file, "rb") for model_file in model_files]
         for i, f in enumerate(bin_files):
             files.append(
@@ -109,11 +142,11 @@ class Remote:
             )
             return {}
 
-    def upload_onnx_model(self, path_to_model, metadata={}):
-        if ".onnx" not in path_to_model:
-            path_to_model = f"{path_to_model}.onnx"
-        onnx_file = open(path_to_model, "rb")
-        filename = os.path.basename(path_to_model)
+    def upload_onnx_model(self, tmp_path, metadata={}):
+        if ".onnx" not in tmp_path:
+            tmp_path = f"{tmp_path}.onnx"
+        onnx_file = open(tmp_path, "rb")
+        filename = os.path.basename(tmp_path)
         files = [(filename, (filename, onnx_file, "application/octet-stream"))]
         model_url = None
         try:

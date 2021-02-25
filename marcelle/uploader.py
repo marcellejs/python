@@ -1,5 +1,6 @@
 import json
 import os
+from tqdm import tqdm
 
 
 class Uploader:
@@ -57,14 +58,14 @@ class Uploader:
 
     def upload_new_checkpoints(self, overwrite=False):
         upload_count = 0
-        for i, checkpoint in enumerate(self.run_data["checkpoints"]):
+        for i, checkpoint in tqdm(enumerate(self.run_data["checkpoints"])):
             if "_id" in checkpoint:
                 if overwrite:
                     del checkpoint["_id"]
                 else:
                     continue
             remote_checkpoint = self.remote.upload_model(
-                checkpoint["local_path"], checkpoint
+                checkpoint["local_path"], checkpoint["local_format"], checkpoint
             )
             self.run_data["checkpoints"][i] = {**checkpoint, **remote_checkpoint}
             upload_count += 1
