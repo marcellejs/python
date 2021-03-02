@@ -100,6 +100,8 @@ class Remote:
             )
         if self.save_format == "tfjs":
             if local_format == "h5":
+                if ".h5" not in path_to_model:
+                    path_to_model = f"{path_to_model}.h5"
                 reconstructed_model = keras.models.load_model(path_to_model)
                 print("reconstructed_model (h5)", reconstructed_model)
                 tmp_path = "~tmp-tfjs~"
@@ -118,6 +120,8 @@ class Remote:
             return res
         elif self.save_format == "onnx":
             if self.source == "keras":
+                if local_format == "h5" and ".h5" not in path_to_model:
+                    path_to_model = f"{path_to_model}.h5"
                 reconstructed_model = keras.models.load_model(path_to_model)
                 onnx_model = keras2onnx.convert_keras(
                     reconstructed_model, reconstructed_model.name
