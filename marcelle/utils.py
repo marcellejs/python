@@ -40,6 +40,14 @@ def normalize_value(v):
 
 
 def conform_dict(d):
+    """Normalize a dictionary for JSON serialization, casting numpy types
+
+    Args:
+        d (dict): Input dictionary
+
+    Returns:
+        dict: Normalized dictionary
+    """
     if type(d) != dict:
         return normalize_value(d)
     for k, v in d.items():
@@ -86,6 +94,20 @@ def get_layers_summary(model):
 
 
 def get_model_info(model, source, loss=None):
+    """Get information about a Keras Model
+
+    Args:
+        model: an instance of `keras.Model`
+        source (string): The source framework (only `keras` is currently supported)
+        loss (string or loss function, optional): Loss function used for training.
+            Defaults to None.
+
+    Raises:
+        Exception: When another source than `keras` is used
+
+    Returns:
+        dict: Keras model information
+    """
     if source == "keras":
         if loss is None and hasattr(model, "loss"):
             loss = model.loss if type(model.loss) == str else model.loss.name
