@@ -159,14 +159,14 @@ class Remote:
                     (os.path.basename(model_files[i]), f, "application/octet-stream"),
                 )
             )
-        model_url = None
+        uploaded_files = None
         try:
             res = requests.post(self.models_url + "/upload", files=files)
             if res.status_code != 200:
                 print("An error occured with HTTP Status Code:", res.status_code)
                 print(res.json()["error"])
                 return {}
-            model_url = res.json()["model.json"]
+            uploaded_files = res.json()
         except requests.exceptions.RequestException:
             print(
                 "Warning: could not reach Marcelle backend at "
@@ -174,14 +174,14 @@ class Remote:
             )
         json_file.close()
         [f.close() for f in bin_files]
-        if not model_url:
+        if not uploaded_files:
             return {}
         try:
             res = requests.post(
                 self.models_url,
                 json={
                     **metadata,
-                    "url": model_url,
+                    "files": uploaded_files,
                     "format": self.save_format,
                 },
             )
@@ -210,28 +210,28 @@ class Remote:
         onnx_file = open(tmp_path, "rb")
         filename = os.path.basename(tmp_path)
         files = [(filename, (filename, onnx_file, "application/octet-stream"))]
-        model_url = None
+        uploaded_files = None
         try:
             res = requests.post(self.models_url + "/upload", files=files)
             if res.status_code != 200:
                 print("An error occured with HTTP Status Code:", res.status_code)
                 print(res.json()["error"])
                 return {}
-            model_url = res.json()[filename]
+            uploaded_files = res.json()
         except requests.exceptions.RequestException:
             print(
                 "Warning: could not reach Marcelle backend at "
                 + str(self.models_url + "/upload")
             )
         onnx_file.close()
-        if not model_url:
+        if not uploaded_files:
             return {}
         try:
             res = requests.post(
                 self.models_url,
                 json={
                     **metadata,
-                    "url": model_url,
+                    "files": uploaded_files,
                     "format": self.save_format,
                 },
             )
