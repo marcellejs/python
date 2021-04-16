@@ -47,11 +47,11 @@ class Writer:
         self.source = source
         self.run_data = None
 
-    def create_run(self, model, run_params={}, loss=None):
+    def create_run(self, model=None, run_params={}, loss=None):
         """Create a new training run
 
         Args:
-            model (keras.Model): A keras.Model instance associated with the training
+            model (keras.Model, optional): A keras.Model instance associated with the training
             run_params (dict, optional): A dictionary of parameters associated with
                 the training run (e.g. hyperparameters). Defaults to {}.
             loss (string or loss function, optional): The loss function used for training.
@@ -64,14 +64,15 @@ class Writer:
                 "source": self.source,
                 "status": "idle",
                 "params": run_params,
-                "model": get_model_info(model, self.source, loss),
                 "logs": {},
                 "checkpoints": [],
                 "assets": [],
             }
         )
+        if model != None: 
+            self.run_data["model"] = get_model_info(model, self.source, loss)
+            self.model = model
         self.remote.create(self.run_data)
-        self.model = model
         self.__init_disk()
         self.__write_to_disk()
 
@@ -123,25 +124,28 @@ class Writer:
     def save_checkpoint(self, epoch, model=None, metadata={}):
         if model is not None:
             self.model = model
-        model_path = self.__write_models_to_disk(epoch)
-        checkpoint_meta = {
-            "epoch": epoch,
-            "local_path": model_path,
-            "local_format": self.disk_save_format,
-            **metadata,
-        }
-        remote_checkpoint = self.remote.upload_model(
-            model_path,
-            local_format=self.disk_save_format,
-            metadata=checkpoint_meta,
-        )
-        checkpoint = {**checkpoint_meta, **remote_checkpoint}
+        if self.model != None:
+            model_path = self.__write_models_to_disk(epoch)
+            checkpoint_meta = {
+                "epoch": epoch,
+                "local_path": model_path,
+                "local_format": self.disk_save_format,
+                **metadata,
+            }
+            remote_checkpoint = self.remote.upload_model(
+                model_path,
+                local_format=self.disk_save_format,
+                metadata=checkpoint_meta,
+            )
+            checkpoint = {**checkpoint_meta, **remote_checkpoint}
 
-        self.run_data["checkpoints"].append(checkpoint)
+            self.run_data["checkpoints"].append(checkpoint)
 
-        self.run_data = conform_dict(self.run_data)
-        self.remote.update(self.run_data)
-        self.__write_to_disk()
+            self.run_data = conform_dict(self.run_data)
+            self.remote.update(self.run_data)
+            self.__write_to_disk()
+        else:
+            raise Exception("Model is None!")
 
     def save_asset(self, epoch, asset_path, metadata={}):
         asset_meta = {"epoch": epoch, "local_path": asset_path, **metadata}
