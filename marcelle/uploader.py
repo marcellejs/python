@@ -67,6 +67,7 @@ class Uploader:
                 print(f"Run {start} not found on the server, uploading...")
             else:
                 print(f"Run {start} was removed from the server, re-uploading...")
+            overwrite = True
             self.remote.create(self.run_data)
         self.__upload_new_checkpoints(overwrite=overwrite)
         self.remote.update(self.run_data)
