@@ -6,6 +6,7 @@ import shutil
 from tensorflow import keras
 import tensorflowjs as tfjs
 import keras2onnx
+from .data_store import DataStore
 
 
 class Remote:
@@ -27,11 +28,11 @@ class Remote:
                 currently fully supported. Defaults to "keras".
         """
         super().__init__()
-        self.backend_root = backend_root + ("" if backend_root[-1] == "/" else "/")
+        store = DataStore(backend_root)
         self.save_format = save_format
-        self.runs_url = self.backend_root + "runs"
-        self.models_url = self.backend_root + f"{save_format}-models"
-        self.assets_url = self.backend_root + "assets"
+        self.runs_service = store.service("runs")
+        self.models_service = store.service(f"{save_format}-models")
+        self.assets_service = store.service("assets")
         self.source = source
         self.run_id = None
 
@@ -43,17 +44,8 @@ class Remote:
 
         TODO: Document "run_data" format (@see Writer)
         """
-        try:
-            res = requests.post(self.runs_url, json=run_data)
-            if res.status_code != 201:
-                print(
-                    "Error: Could not create run. Improve error message."
-                    f"HTTP Status Code: {res.status_code}"
-                )
-            else:
-                self.run_id = res.json()["_id"]
-        except requests.exceptions.RequestException:
-            print("Warning: could not reach Marcelle backend at " + str(self.runs_url))
+        res = self.runs_service.create(run_data)
+        self.run_id = res["_id"]
 
     def update(self, run_data=None):
         """Update the run data, and upload it on the server
@@ -62,17 +54,12 @@ class Remote:
             run_data (dict, optional): Run data as a JSON-serializable dictionary.
         """
         if not self.run_id:
-            print("Warning: could not reach Marcelle backend at " + str(self.runs_url))
-            return
-        try:
-            res = requests.patch(
-                self.runs_url + "/" + self.run_id,
-                json=run_data,
+            print(
+                "Warning: could not reach Marcelle backend at "
+                + str(self.runs_service.location)
             )
-            if res.status_code != 200:
-                print("An error occured with HTTP Status Code:", res.status_code)
-        except requests.exceptions.RequestException:
-            print("Warning: could not reach Marcelle backend at " + str(self.runs_url))
+            return
+        self.runs_service.patch(self.run_id, run_data)
 
     def upload_model(self, path_to_model, local_format, metadata={}):
         """Upload a model checkpoint to the backend server
@@ -161,7 +148,7 @@ class Remote:
             )
         uploaded_files = None
         try:
-            res = requests.post(self.models_url + "/upload", files=files)
+            res = requests.post(self.models_service.location + "/upload", files=files)
             if res.status_code != 200:
                 print("An error occured with HTTP Status Code:", res.status_code)
                 print(res.json()["error"])
@@ -170,29 +157,19 @@ class Remote:
         except requests.exceptions.RequestException:
             print(
                 "Warning: could not reach Marcelle backend at "
-                + str(self.models_url + "/upload")
+                + str(self.models_service.location + "/upload")
             )
         json_file.close()
         [f.close() for f in bin_files]
         if not uploaded_files:
             return {}
-        try:
-            res = requests.post(
-                self.models_url,
-                json={
-                    **metadata,
-                    "files": uploaded_files,
-                    "format": self.save_format,
-                },
-            )
-            if res.status_code != 201:
-                print("An error occured with HTTP Status Code:", res.status_code)
-            return res.json()
-        except requests.exceptions.RequestException:
-            print(
-                "Warning: could not reach Marcelle backend at " + str(self.models_url)
-            )
-            return {}
+        return self.models_service.create(
+            {
+                **metadata,
+                "files": uploaded_files,
+                "format": self.save_format,
+            }
+        )
 
     def upload_onnx_model(self, tmp_path, metadata={}):
         """Upload an ONNX model checkpoint to the backend server
@@ -212,7 +189,7 @@ class Remote:
         files = [(filename, (filename, onnx_file, "application/octet-stream"))]
         uploaded_files = None
         try:
-            res = requests.post(self.models_url + "/upload", files=files)
+            res = requests.post(self.models_service.location + "/upload", files=files)
             if res.status_code != 200:
                 print("An error occured with HTTP Status Code:", res.status_code)
                 print(res.json()["error"])
@@ -221,28 +198,18 @@ class Remote:
         except requests.exceptions.RequestException:
             print(
                 "Warning: could not reach Marcelle backend at "
-                + str(self.models_url + "/upload")
+                + str(self.models_service.location + "/upload")
             )
         onnx_file.close()
         if not uploaded_files:
             return {}
-        try:
-            res = requests.post(
-                self.models_url,
-                json={
-                    **metadata,
-                    "files": uploaded_files,
-                    "format": self.save_format,
-                },
-            )
-            if res.status_code != 201:
-                print("An error occured with HTTP Status Code:", res.status_code)
-            return res.json()
-        except requests.exceptions.RequestException:
-            print(
-                "Warning: could not reach Marcelle backend at " + str(self.models_url)
-            )
-            return {}
+        return self.models_service.create(
+            {
+                **metadata,
+                "files": uploaded_files,
+                "format": self.save_format,
+            }
+        )
 
     def upload_asset(self, path_to_asset, metadata={}):
         """Upload an asset to the backend server. Assets are files of arbitrary
@@ -269,7 +236,7 @@ class Remote:
         files = [(filename, (filename, asset_file, mime))]
         asset_url = None
         try:
-            res = requests.post(self.assets_url + "/upload", files=files)
+            res = requests.post(self.assets_service.location + "/upload", files=files)
             if res.status_code != 200:
                 print("An error occured with HTTP Status Code:", res.status_code)
                 print(res.json()["error"])
@@ -278,30 +245,20 @@ class Remote:
         except requests.exceptions.RequestException:
             print(
                 "Warning: could not reach Marcelle backend at "
-                + str(self.assets_url + "/upload")
+                + str(self.assets_service.location + "/upload")
             )
         asset_file.close()
         if not asset_url:
             return {}
-        try:
-            res = requests.post(
-                self.assets_url,
-                json={
-                    **metadata,
-                    "filename": filename,
-                    "extension": extension,
-                    "mime": mime,
-                    "url": asset_url,
-                },
-            )
-            if res.status_code != 201:
-                print("An error occured with HTTP Status Code:", res.status_code)
-            return res.json()
-        except requests.exceptions.RequestException:
-            print(
-                "Warning: could not reach Marcelle backend at " + str(self.assets_url)
-            )
-            return {}
+        return self.assets_service.create(
+            {
+                **metadata,
+                "filename": filename,
+                "extension": extension,
+                "mime": mime,
+                "url": asset_url,
+            }
+        )
 
     def retrieve_run(self, run_start_at):
         """Retrieve a training run from the backend using its starting date
@@ -314,19 +271,23 @@ class Remote:
         """
         run_data = False
         try:
-            res = requests.get(
-                self.runs_url + f"?source={self.source}&run_start_at={run_start_at}"
-                "&$sort[createdAt]=-1"
+            res = self.runs_service.find(
+                {
+                    "query": {
+                        "source": self.source,
+                        "run_start_at": run_start_at,
+                        "$sort": {"$updatedAt": -1},
+                    }
+                }
             )
-            if res.status_code != 200:
-                print(f"An error occured with HTTP Status Code: {res.status_code}")
-            else:
-                res_json = res.json()
-                if res_json["total"] > 0:
-                    self.run_id = res_json["data"][0]["_id"]
-                    run_data = res_json["data"][0]
+            if res["total"] > 0:
+                self.run_id = res["data"][0]["_id"]
+                run_data = res["data"][0]
         except requests.exceptions.RequestException:
-            print("Warning: could not reach Marcelle backend at " + str(self.runs_url))
+            print(
+                "Warning: could not reach Marcelle backend at "
+                + str(self.runs_service.location)
+            )
         return run_data
 
     def remove_run(self, run_data):
@@ -341,30 +302,15 @@ class Remote:
             bool: wether the run was successfully removed
         """
         for checkpoint in run_data["checkpoints"]:
-            try:
-                req_url = self.models_url + "/" + checkpoint["_id"]
-                res = requests.delete(req_url)
-                print("remove: res.status_code=", res.status_code)
-                if res.status_code != 200:
-                    print(
-                        f"An error occured with HTTP Status Code: {res.status_code}\n"
-                        f"Request URL: {req_url}"
-                    )
-            except requests.exceptions.RequestException:
-                print(
-                    "Warning: could not reach Marcelle backend at "
-                    + str(self.models_url)
-                )
+            self.models_service.remove(checkpoint["_id"])
         try:
-            res = requests.delete(self.runs_url + "/" + run_data["_id"])
-            print("remove: res.status_code=", res.status_code)
-            if res.status_code != 200:
-                print(f"An error occured with HTTP Status Code: {res.status_code}")
-            else:
-                res_json = res.json()
-                start_date = res_json["run_start_at"]
-                print(f"Removed run {id} from server (run start date: {start_date})")
+            res = self.runs_service.remove(run_data["_id"])
+            start_date = res["run_start_at"]
+            print(f"Removed run {id} from server (run start date: {start_date})")
             return True
         except requests.exceptions.RequestException:
-            print("Warning: could not reach Marcelle backend at " + str(self.runs_url))
+            print(
+                "Warning: could not reach Marcelle backend at "
+                + str(self.runs_service.location)
+            )
             return False

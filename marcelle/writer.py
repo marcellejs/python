@@ -51,11 +51,11 @@ class Writer:
         """Create a new training run
 
         Args:
-            model (keras.Model, optional): A keras.Model instance associated with the training
-            run_params (dict, optional): A dictionary of parameters associated with
-                the training run (e.g. hyperparameters). Defaults to {}.
-            loss (string or loss function, optional): The loss function used for training.
-                Defaults to None.
+            model (keras.Model, optional): A keras.Model instance associated with the
+                training run_params (dict, optional): A dictionary of parameters
+                associated with the training run (e.g. hyperparameters). Defaults to {}.
+            loss (string or loss function, optional): The loss function used for
+                training. Defaults to None.
         """
         begin_date = datetime.now()
         self.run_data = conform_dict(
@@ -69,7 +69,7 @@ class Writer:
                 "assets": [],
             }
         )
-        if model != None: 
+        if model is not None:
             self.run_data["model"] = get_model_info(model, self.source, loss)
             self.model = model
         self.remote.create(self.run_data)
@@ -124,7 +124,7 @@ class Writer:
     def save_checkpoint(self, epoch, model=None, metadata={}):
         if model is not None:
             self.model = model
-        if self.model != None:
+        if self.model is not None:
             model_path = self.__write_models_to_disk(epoch)
             checkpoint_meta = {
                 "epoch": epoch,
