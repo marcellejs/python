@@ -44,8 +44,25 @@ class Remote:
 
         TODO: Document "run_data" format (@see Writer)
         """
+        query = {
+            "basename": run_data["basename"],
+            "$sort": {"createdAt": -1},
+            "$select": ["name"],
+            "$limit": 1,
+        }
+        latest_runs = self.runs_service.find({"query": query})
+        next_index = 1
+        if (
+            latest_runs
+            and len(latest_runs["data"]) > 0
+            and "name" in latest_runs["data"][0]
+        ):
+            name = latest_runs["data"][0]["name"]
+            next_index = int(name.split(f"{run_data['basename']}-")[1]) + 1
+        run_data["name"] = f"{run_data['basename']}-{next_index}"
         res = self.runs_service.create(run_data)
-        self.run_id = res["_id"]
+        if res is not None:
+            self.run_id = res["_id"]
 
     def update(self, run_data=None):
         """Update the run data, and upload it on the server
@@ -162,7 +179,7 @@ class Remote:
         json_file.close()
         [f.close() for f in bin_files]
         if not uploaded_files:
-            return {}
+            return None
         return self.models_service.create(
             {
                 **metadata,
@@ -202,7 +219,7 @@ class Remote:
             )
         onnx_file.close()
         if not uploaded_files:
-            return {}
+            return None
         return self.models_service.create(
             {
                 **metadata,
@@ -275,8 +292,8 @@ class Remote:
                 {
                     "query": {
                         "source": self.source,
-                        "run_start_at": run_start_at,
-                        "$sort": {"$updatedAt": -1},
+                        "start": run_start_at,
+                        "$sort": {"updatedAt": -1},
                     }
                 }
             )
@@ -305,7 +322,7 @@ class Remote:
             self.models_service.remove(checkpoint["_id"])
         try:
             res = self.runs_service.remove(run_data["_id"])
-            start_date = res["run_start_at"]
+            start_date = res["start"]
             print(f"Removed run {id} from server (run start date: {start_date})")
             return True
         except requests.exceptions.RequestException:

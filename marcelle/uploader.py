@@ -42,7 +42,7 @@ class Uploader:
         self.reset()
         with open(os.path.join(run_directory, "run_data.json"), "r") as json_file:
             self.run_data = json.load(json_file)
-        start = self.run_data["run_start_at"]
+        start = self.run_data["start"]
         print(f"Retrieving remote run '{start}'...")
         remote_run_data = self.remote.retrieve_run(start)
         if remote_run_data and overwrite:
@@ -78,14 +78,23 @@ class Uploader:
     def __upload_new_checkpoints(self, overwrite=False):
         upload_count = 0
         for i, checkpoint in tqdm(enumerate(self.run_data["checkpoints"])):
-            if "_id" in checkpoint:
+            if "id" in checkpoint:
                 if overwrite:
-                    del checkpoint["_id"]
+                    del checkpoint["id"]
                 else:
                     continue
+            checkpoint_meta = checkpoint["metadata"]
             remote_checkpoint = self.remote.upload_model(
-                checkpoint["local_path"], checkpoint["local_format"], checkpoint
+                checkpoint_meta["local_path"],
+                checkpoint_meta["local_format"],
+                checkpoint_meta,
             )
-            self.run_data["checkpoints"][i] = {**checkpoint, **remote_checkpoint}
+            if remote_checkpoint is not None:
+                checkpoint = {
+                    **checkpoint,
+                    "id": remote_checkpoint["_id"],
+                    "service": f"{self.remote.save_format}-models",
+                }
+            self.run_data["checkpoints"][i] = checkpoint
             upload_count += 1
         print(f"{upload_count} models were uploaded to marcelle")

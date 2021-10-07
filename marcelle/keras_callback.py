@@ -5,6 +5,7 @@ from .writer import Writer
 class KerasCallback(tf.keras.callbacks.Callback):
     def __init__(
         self,
+        name,
         backend_root="http://localhost:3030",
         disk_save_format="h5",
         remote_save_format="tfjs",
@@ -15,6 +16,7 @@ class KerasCallback(tf.keras.callbacks.Callback):
         """A Keras Callback to store training information in a Marcelle backend and locally.
 
         Args:
+            name (str): The base name for the run.
             backend_root (str, optional): The backend's root URL.
                 Defaults to "http://localhost:3030".
             disk_save_format (str, optional): Format used to store the models locally.
@@ -32,6 +34,7 @@ class KerasCallback(tf.keras.callbacks.Callback):
         self.model_checkpoint_freq = model_checkpoint_freq
         self.run_params = run_params
         self.writer = Writer(
+            name,
             backend_root=backend_root,
             disk_save_format=disk_save_format,
             remote_save_format=remote_save_format,
@@ -52,9 +55,9 @@ class KerasCallback(tf.keras.callbacks.Callback):
             and (epoch + 1) % self.model_checkpoint_freq == 0
         )
         if save_checkpoint:
-            self.writer.save_checkpoint(epoch)
+            self.writer.save_checkpoint(epoch + 1)
 
-        self.writer.save_epoch(epoch, logs)
+        self.writer.save_epoch(epoch + 1, logs)
 
     def on_train_end(self, logs=None):
         self.writer.train_end(logs)
