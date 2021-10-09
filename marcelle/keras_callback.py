@@ -54,10 +54,7 @@ class KerasCallback(tf.keras.callbacks.Callback):
             self.model_checkpoint_freq is not None
             and (epoch + 1) % self.model_checkpoint_freq == 0
         )
-        if save_checkpoint:
-            self.writer.save_checkpoint(epoch + 1)
-
-        self.writer.save_epoch(epoch + 1, logs)
+        self.writer.save_epoch(epoch + 1, logs, save_checkpoint)
 
     def on_train_end(self, logs=None):
         self.writer.train_end(logs)
