@@ -1,6 +1,42 @@
-[build-system]
-requires = [
-    "setuptools>=42",
-    "wheel"
+[tool.poetry]
+name = "marcelle"
+version = "0.0.4"
+description = "Python package for interacting with Marcelle"
+authors = ["Jules Françoise <me@julesfrancoise.com>"]
+maintainers = ["Jules Françoise <me@julesfrancoise.com>"]
+license = "MIT"
+readme = "README.md"
+homepage = "https://marcelle.dev/"
+repository = "https://github.com/marcellejs/python/"
+documentation = "https://marcelle.dev/api/python.html"
+keywords = [
+    "Marcelle",
+    "Interactive Machine Learning",
+    "Tensorflow",
+    "Tensorflow.js",
+    "Keras",
+    "ONNX"
 ]
-build-backend = "setuptools.build_meta"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Development Status :: 3 - Alpha"
+]
+
+[tool.poetry.dependencies]
+python = ">=3.8,<3.10"
+numpy = "^1.21.4"
+tensorflow = "^2.7.0"
+tensorflowjs = "^3.11.0"
+tqdm = "^4.62.3"
+filetype = "^1.0.8"
+requests = "^2.26.0"
+keras2onnx = "^1.7.0"
+
+[tool.poetry.dev-dependencies]
+pytest = "^5.2"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
