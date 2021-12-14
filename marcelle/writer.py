@@ -12,6 +12,7 @@ from .utils import conform_dict, get_model_info
 class Writer:
     def __init__(
         self,
+        name,
         backend_root="http://localhost:3030",
         disk_save_format="h5",
         remote_save_format="tfjs",
@@ -21,6 +22,7 @@ class Writer:
         """The Writer class allows to save training information locally and to a backend
 
         Args:
+            name (str): The base name for the run.
             backend_root (str, optional): The backend's root URL.
                 Defaults to "http://localhost:3030".
             disk_save_format (str, optional): Format used to store the models locally.
@@ -35,6 +37,7 @@ class Writer:
         TODO: take a remote instance as argument (as for uploader), and make it optional
         TODO: make Keras model optional
         """
+        self.name = name
         self.base_log_dir = base_log_dir
         self.log_folder = None
         self.disk_save_format = disk_save_format
@@ -60,7 +63,8 @@ class Writer:
         begin_date = datetime.now()
         self.run_data = conform_dict(
             {
-                "run_start_at": begin_date.strftime("%Y-%m-%dT%H:%M:%S"),
+                "basename": self.name,
+                "start": begin_date.strftime("%Y-%m-%dT%H:%M:%S"),
                 "source": self.source,
                 "status": "idle",
                 "params": run_params,
@@ -137,7 +141,17 @@ class Writer:
                 local_format=self.disk_save_format,
                 metadata=checkpoint_meta,
             )
-            checkpoint = {**checkpoint_meta, **remote_checkpoint}
+            checkpoint = {
+                "metadata": checkpoint_meta,
+                "name": f"{self.run_data['name']}@{epoch}",
+            }
+            if remote_checkpoint is not None:
+                checkpoint = {
+                    "id": remote_checkpoint["_id"],
+                    "name": f"{self.run_data['name']}@{epoch}",
+                    "service": f"{self.remote_save_format}-models",
+                    "metadata": checkpoint_meta,
+                }
 
             self.run_data["checkpoints"].append(checkpoint)
 
@@ -158,14 +172,14 @@ class Writer:
         self.remote.update(self.run_data)
         self.__write_to_disk()
 
-    def train_end(self, logs=None, save_checkpoint=False):
+    def train_end(self, logs=None, save_checkpoint=True):
         """Signal that the training has ended
 
         Args:
             logs (dict, optional): Dictionary of logs (UNUSED?). Defaults to None.
             save_checkpoint (bool, optional): If `True`, a checkpoint will be saved
                 locally and uploaded to the backend, according to the formats specified
-                in the constructor. Defaults to False.
+                in the constructor. Defaults to True.
         """
         self.run_data["status"] = "success"
         if save_checkpoint:
@@ -178,7 +192,7 @@ class Writer:
         # check if logs folder exist in marcelle-logs folder
         subprocess.call(["mkdir", "-p", self.base_log_dir])
         self.log_folder = os.path.join(
-            self.base_log_dir, "-".join(self.run_data["run_start_at"].split(":"))
+            self.base_log_dir, "-".join(self.run_data["start"].split(":"))
         )
         subprocess.call(["mkdir", "-p", self.log_folder])
 

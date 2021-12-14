@@ -61,7 +61,7 @@ class Service:
             res = requests.get(url)
             if res.status_code != 200:
                 print(
-                    "Error: Could not find items from service. Improve error message."
+                    "Error: Could not find items from service."
                     f"HTTP Status Code: {res.status_code}"
                 )
             else:
