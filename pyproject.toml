@@ -32,7 +32,7 @@ tensorflowjs = "^3.11.0"
 tqdm = "^4.62.3"
 filetype = "^1.0.8"
 requests = "^2.26.0"
-keras2onnx = "^1.7.0"
+tf2onnx = "^1.9.3"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"

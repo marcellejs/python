@@ -4,7 +4,7 @@ import json
 import subprocess
 from tensorflow import saved_model
 import tensorflowjs as tfjs
-import keras2onnx
+import tf2onnx
 from .remote import Remote
 from .utils import conform_dict, get_model_info
 
@@ -216,6 +216,7 @@ class Writer:
             tfjs.converters.save_keras_model(self.model, model_path)
         if self.disk_save_format == "onnx":
             model_path += ".onnx"
-            onnx_model = keras2onnx.convert_keras(self.model, self.model.name)
-            keras2onnx.save_model(onnx_model, model_path)
+            onnx_model = tf2onnx.from_keras(self.model, self.model.name)
+            with open(model_path, "wb") as f:
+                    f.write(onnx_model.SerializeToString())
         return model_path

@@ -5,7 +5,7 @@ import requests
 import shutil
 from tensorflow import keras
 import tensorflowjs as tfjs
-import keras2onnx
+import tf2onnx
 from .data_store import DataStore
 
 
@@ -127,11 +127,12 @@ class Remote:
                 if local_format == "h5" and ".h5" not in path_to_model:
                     path_to_model = f"{path_to_model}.h5"
                 reconstructed_model = keras.models.load_model(path_to_model)
-                onnx_model = keras2onnx.convert_keras(
+                onnx_model = tf2onnx.from_keras(
                     reconstructed_model, reconstructed_model.name
                 )
                 tmp_path = "~tmp-onnx~"
-                keras2onnx.save_model(onnx_model, tmp_path)
+                with open(tmp_path, "wb") as f:
+                    f.write(onnx_model.SerializeToString())
                 res = self.upload_onnx_model(tmp_path, metadata)
                 shutil.rmtree(tmp_path)
                 return res
