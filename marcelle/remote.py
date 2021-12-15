@@ -169,7 +169,7 @@ class Remote:
             res = requests.post(self.models_service.location + "/upload", files=files)
             if res.status_code != 200:
                 print("An error occured with HTTP Status Code:", res.status_code)
-                print(res.json()["error"])
+                print(res.json())
                 return {}
             uploaded_files = res.json()
         except requests.exceptions.RequestException:
