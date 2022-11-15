@@ -1,5 +1,8 @@
-import requests
-from .utils import conform_dict
+import socketio
+
+from marcelle.utils import conform_dict
+
+# from .utils import conform_dict
 
 
 class DataStore:
@@ -15,6 +18,46 @@ class DataStore:
         """
         super().__init__()
         self.location = location + ("" if location[-1] == "/" else "/")
+        self.sio = socketio.Client()
+
+        @self.sio.event
+        def connect():
+            print(f"Connected to backend at {self.location}")
+
+        @self.sio.event
+        def connect_error(data):
+            print("The connection failed!", data)
+
+        @self.sio.event
+        def disconnect():
+            print(f"Disconnected from backend at {self.location}")
+
+    def connect(self, email=None, password=None):
+        self.sio.connect(self.location)
+        if email is not None and password is not None:
+            self.login(email, password)
+        return self
+
+    def login(self, email, password):
+        res = self.sio.call(
+            "create",
+            (
+                "authentication",
+                {
+                    "strategy": "local",
+                    "email": email,
+                    "password": password,
+                },
+            ),
+        )
+        if "code" in res:
+            print(f"Authentication error [{res['code']}]: {res['message']}")
+        else:
+            print(f"Authenticated as: {res[1]['user']['email']}")
+        return self
+
+    def disconnect(self):
+        self.sio.disconnect()
 
     def service(self, name):
         """Access a service by name
@@ -25,20 +68,29 @@ class DataStore:
         Returns:
             Service: Marcelle Service object.
         """
-        return Service(self.location + name)
+        return Service(self.location, name, self.sio)
 
 
 class Service:
-    def __init__(self, location):
+    def __init__(self, location, name, sio):
         """Services provide an interface to interact with data stored in Marcelle backend.
         Since Marcelle backends are based on Feathers.js (https://docs.feathersjs.com/),
         services provide a similar API with predefined CRUD methods.
 
         Args:
-            location (str): Service location URL.
+            location (str): Backend location URL.
+            name (str): service name
+            sio (str): Socket-IO client instance
         """
         super().__init__()
         self.location = location
+        self.name = name
+        self.sio = sio
+
+    def on(self, event_name, callback):
+        @self.sio.on(f"{self.name} {event_name}")
+        def on_event(data):
+            callback(data)
 
     def find(self, params={}):
         """Retrieves a list of all resources from the service. params.query can be used
@@ -53,21 +105,16 @@ class Service:
             dict: A dictionary containing the response. Data is paginated by default.
             see https://docs.feathersjs.com/api/services.html#params
         """
-        try:
-            url = self.location
-            if "query" in params and params["query"] is not None:
-                q = process_query(params["query"])
-                url += q
-            res = requests.get(url)
-            if res.status_code != 200:
-                print(
-                    "Error: Could not find items from service."
-                    f"HTTP Status Code: {res.status_code}"
-                )
-            else:
-                return res.json()
-        except requests.exceptions.RequestException:
-            print("Warning: could not reach Marcelle backend at " + str(self.location))
+        query = (
+            params["query"]
+            if ("query" in params and params["query"] is not None)
+            else {}
+        )
+        res = self.sio.call("find", (self.name, query))
+        if "code" in res:
+            print(f"An error occurred [{res['code']}]: {res['message']}")
+            return {}
+        return res[1]
 
     def get(self, id, params={}):
         """Retrieves a single resource with the given id from the service.
@@ -81,21 +128,16 @@ class Service:
         Returns:
             dict: the requested item as a dictionary
         """
-        try:
-            url = self.location + "/" + id
-            if "query" in params and params["query"] is not None:
-                q = process_query(params["query"])
-                url += q
-            res = requests.get(url)
-            if res.status_code != 200:
-                print(
-                    "Error: Could not find items from service. Improve error message."
-                    f"HTTP Status Code: {res.status_code}"
-                )
-            else:
-                return res.json()
-        except requests.exceptions.RequestException:
-            print("Warning: could not reach Marcelle backend at " + str(self.location))
+        query = (
+            params["query"]
+            if ("query" in params and params["query"] is not None)
+            else {}
+        )
+        res = self.sio.call("get", (self.name, id, query))
+        if "code" in res:
+            print(f"An error occurred [{res['code']}]: {res['message']}")
+            return {}
+        return res[1]
 
     def create(self, data, params={}):
         """Creates a new resource with data. The method should return with the newly
@@ -110,21 +152,16 @@ class Service:
         Returns:
             dict: the created ressource
         """
-        try:
-            url = self.location
-            if "query" in params and params["query"] is not None:
-                q = process_query(params["query"])
-                url += q
-            res = requests.post(url, json=conform_dict(data))
-            if res.status_code != 201:
-                print(
-                    "Error: Could not create item. Improve error message."
-                    f"HTTP Status Code: {res.status_code}"
-                )
-            else:
-                return res.json()
-        except requests.exceptions.RequestException:
-            print("Warning: could not reach Marcelle backend at " + str(self.location))
+        query = (
+            params["query"]
+            if ("query" in params and params["query"] is not None)
+            else {}
+        )
+        res = self.sio.call("create", (self.name, conform_dict(data), query))
+        if "code" in res:
+            print(f"An error occurred [{res['code']}]: {res['message']}")
+            return {}
+        return res[1]
 
     def update(self, id, data, params={}):
         """Replaces the resource identified by id with data. The method should
@@ -142,18 +179,16 @@ class Service:
         Returns:
             dict: updated resource data
         """
-        try:
-            url = self.location + "/" + id
-            if "query" in params and params["query"] is not None:
-                q = process_query(params["query"])
-                url += q
-            res = requests.put(url, json=conform_dict(data))
-            if res.status_code != 200:
-                print("An error occured with HTTP Status Code:", res.status_code)
-            else:
-                return res.json()
-        except requests.exceptions.RequestException:
-            print("Warning: could not reach Marcelle backend at " + str(self.runs_url))
+        query = (
+            params["query"]
+            if ("query" in params and params["query"] is not None)
+            else {}
+        )
+        res = self.sio.call("update", (self.name, id, conform_dict(data), query))
+        if "code" in res:
+            print(f"An error occurred [{res['code']}]: {res['message']}")
+            return {}
+        return res[1]
 
     def patch(self, id, data, params={}):
         """Merges the existing data of the resource identified by id with the new
@@ -170,18 +205,16 @@ class Service:
         Returns:
             dict: updated resource data
         """
-        try:
-            url = self.location + "/" + id
-            if "query" in params and params["query"] is not None:
-                q = process_query(params["query"])
-                url += q
-            res = requests.patch(url, json=conform_dict(data))
-            if res.status_code != 200:
-                print("An error occured with HTTP Status Code:", res.status_code)
-            else:
-                return res.json()
-        except requests.exceptions.RequestException:
-            print("Warning: could not reach Marcelle backend at " + str(self.runs_url))
+        query = (
+            params["query"]
+            if ("query" in params and params["query"] is not None)
+            else {}
+        )
+        res = self.sio.call("patch", (self.name, id, conform_dict(data), query))
+        if "code" in res:
+            print(f"An error occurred [{res['code']}]: {res['message']}")
+            return {}
+        return res[1]
 
     def remove(self, id, params={}):
         """Removes the resource with id. The method should return with the removed
@@ -197,18 +230,16 @@ class Service:
         Returns:
             dict: the removed data
         """
-        try:
-            url = self.location + "/" + id
-            if "query" in params and params["query"] is not None:
-                q = process_query(params["query"])
-                url += q
-            res = requests.delete(url)
-            if res.status_code != 200:
-                print("An error occured with HTTP Status Code:", res.status_code)
-            else:
-                return res.json()
-        except requests.exceptions.RequestException:
-            print("Warning: could not reach Marcelle backend at " + str(self.runs_url))
+        query = (
+            params["query"]
+            if ("query" in params and params["query"] is not None)
+            else {}
+        )
+        res = self.sio.call("remove", (self.name, id, query))
+        if "code" in res:
+            print(f"An error occurred [{res['code']}]: {res['message']}")
+            return {}
+        return res[1]
 
     def items(self, query={}):
         """Returns an iterator over the service data, given an optional query.
@@ -241,38 +272,4 @@ class Service:
                     else:
                         return
             except Exception as e:
-                raise type(e)(
-                    "Error thrown while iterating through a service: " + e.message
-                )
-
-
-def process_query(query):
-    q = "?"
-    for key, val in query.items():
-        if key == "$sort":
-            for k, v in val.items():
-                q += "%s[%s]=%s&" % (key, k, v)
-        elif key == "$select":
-            for v in val:
-                q += "%s[]=%s&" % (key, v)
-        elif type(val) == dict and "$in" in val:
-            for v in val["$in"]:
-                q += "%s[$in][]=%s&" % (key, v)
-        elif type(val) == dict and "$nin" in val:
-            for v in val["$nin"]:
-                q += "%s[$nin][]=%s&" % (key, v)
-        elif type(val) == dict and "$lt" in val:
-            q += "%s[$lt]=%s&" % (key, val["$lt"])
-        elif type(val) == dict and "$lte" in val:
-            q += "%s[$lte]=%s&" % (key, val["$lte"])
-        elif type(val) == dict and "$gt" in val:
-            q += "%s[$gt]=%s&" % (key, val["$gt"])
-        elif type(val) == dict and "$gte" in val:
-            q += "%s[$gte]=%s&" % (key, val["$gte"])
-        elif type(val) == dict and "$ne" in val:
-            q += "%s[$ne]=%s&" % (key, val["$ne"])
-        elif key == "$or":
-            print("Warning: query operator $or is not implemented")
-        else:
-            q += "%s=%s&" % (key, val)
-    return q[:-1]
+                raise type(e)("Error thrown while iterating through a service: " + e)
